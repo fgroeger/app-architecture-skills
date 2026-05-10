@@ -177,6 +177,61 @@ class AuthUseCase {
 
 ## Data Layer
 
+### DTOs and Entities
+
+- **DTO** (Data Transfer Object): models the network response shape — used only inside the Repository implementation
+- **Entity**: models the database/persistence shape — used only inside the Repository implementation
+- Both are mapped to **domain models** before leaving the Repository — data layer models never cross the layer boundary
+- Use a dedicated **mapper** function or type to convert DTO/Entity → domain model
+
+```swift
+// ✅ DTO for network response
+struct UserDTO: Decodable {
+    let id: String
+    let display_name: String
+    let avatar_url: String?
+}
+
+// ✅ Domain model (lives in Domain layer)
+struct User {
+    let id: String
+    let displayName: String
+    let avatarURL: URL?
+}
+
+// ✅ Mapper (lives in Data layer, alongside DTO)
+extension UserDTO {
+    func toDomain() -> User {
+        User(
+            id: id,
+            displayName: display_name,
+            avatarURL: avatar_url.flatMap(URL.init)
+        )
+    }
+}
+
+// ✅ Repository maps before returning
+final class UserRepository: UserRepositoryProtocol {
+    func fetchProfile(id: String) async throws -> User {
+        let dto: UserDTO = try await apiClient.get("/users/\(id)")
+        return dto.toDomain()  // DTO never leaves this layer
+    }
+}
+```
+
+**DON'T:**
+```swift
+// ❌ DTO returned from Repository (leaks into Domain/UI)
+func fetchProfile(id: String) async throws -> UserDTO { ... }
+
+// ❌ ViewModel maps raw data
+let dto = try await userRepository.fetchProfile(id: id)
+let user = User(id: dto.id, displayName: dto.display_name, ...)
+
+// ❌ Domain model conforms to Decodable (couples domain to transport format)
+struct User: Decodable { ... }
+```
+
 ### Repository
 
 - Single source of truth for its domain entity
@@ -317,6 +372,32 @@ struct AppNavigationGraph: View {
 
 ---
 
+## File Organization
+
+- Each type (class, struct, enum, protocol) lives in **its own file**, named after the type
+- Exception: small private helper types used only within that file may coexist in the same file
+- Never put multiple public/internal types in one file
+
+```
+LoginView.swift          // LoginView only
+LoginViewModel.swift     // LoginViewModel only
+LoginUserUseCase.swift   // LoginUserUseCase only
+AuthRepository.swift     // AuthRepository + AuthRepositoryProtocol
+UserDTO.swift            // UserDTO + UserDTO.toDomain() (private to Data layer)
+```
+
+**DON'T:**
+```swift
+// ❌ Multiple unrelated types in one file
+// AuthModels.swift
+struct LoginRequest { ... }
+struct LoginResponse { ... }
+class AuthRepository { ... }
+protocol AuthRepositoryProtocol { ... }
+```
+
+---
+
 ## Common Mistakes
 
 | Mistake | Fix |
@@ -330,3 +411,5 @@ struct AppNavigationGraph: View {
 | Concrete Repository dependency | Add `RepositoryProtocol`, inject protocol type |
 | One UseCase for multiple domain actions | One UseCase per action (`LoginUser`, `LogoutUser` separately) |
 | `@StateObject` on new screens | Use `@Observable` + `@State private var vm = VM(...)` |
+| DTO/Entity returned from Repository | Map to domain model inside Repository; data layer types stay in data layer |
+| Multiple public types in one file | One type per file; only small private helpers may share a file |
