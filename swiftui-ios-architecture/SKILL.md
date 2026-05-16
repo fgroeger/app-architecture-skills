@@ -1,6 +1,6 @@
 ---
 name: swiftui-ios-architecture
-description: Use when designing or implementing SwiftUI iOS screens, features, or app structure — new apps, new screens in legacy apps, or refactoring existing screens to follow MVVM + Clean Architecture with UseCases and Repositories.
+description: ALWAYS use BEFORE writing any new SwiftUI iOS code — new screens, features, app structure, or refactoring existing screens to follow MVVM + Clean Architecture with UseCases and Repositories.
 ---
 
 # SwiftUI iOS Architecture
